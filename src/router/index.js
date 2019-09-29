@@ -1,6 +1,7 @@
 import Vue from 'vue'
 import Router from 'vue-router'
 import Layout from '@/layouts/index'
+import Login from '@/views/auth/login'
 
 Vue.use(Router)
 
@@ -18,6 +19,11 @@ export const constantRoutes = [
             }
         ]
     },
+    {
+        path: '/login',
+        name: 'login',
+        component: Login,
+    }
 ]
 
 const createRouter = () => new Router({
