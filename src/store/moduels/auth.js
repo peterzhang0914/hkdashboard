@@ -1,5 +1,6 @@
 const state = {
-    data: []
+    data: [],
+    token: 'fake-token'
 }
 const actions = {
     // eslint-disable-next-line no-unused-vars
