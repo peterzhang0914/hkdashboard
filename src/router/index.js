@@ -1,6 +1,6 @@
 import Vue from 'vue'
 import Router from 'vue-router'
-import Layout from '@/layouts/index'
+import Layout from '@/layout'
 import Login from '@/views/auth/login'
 
 Vue.use(Router)
@@ -8,14 +8,14 @@ Vue.use(Router)
 export const constantRoutes = [
     {
         path: '/',
-        name: 'Layout',
+        name: 'layout',
         component: Layout,
-        redirect: '/logistic',
+        redirect: '/wuliu',
         children: [
             {
-                path: 'logistic',
-                name: 'logistic',
-                component: () => import('@/views/logistic/index'),
+                path: 'wuliu',
+                name: 'wuliu',
+                component: () => import('@/views/wuliu'),
             }
         ]
     },
@@ -23,7 +23,8 @@ export const constantRoutes = [
         path: '/login',
         name: 'login',
         component: Login,
-    }
+    },
+
 ]
 
 const createRouter = () => new Router({

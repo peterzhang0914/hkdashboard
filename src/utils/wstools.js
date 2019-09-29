@@ -1,24 +1,26 @@
-let webstockUrl=process.env.VUE_APP_WS_BASEURL;
-let WebSocketObj=Object;
+let webstockUrl = process.env.VUE_APP_WS_BASEURL;
+let WebSocketObj = Object;
 var lockReconnect = false;//避免重复连接
 var tt;
-function createWebSocket() {
+
+function createWebSocket () {
     try {
-        WebSocketObj= new WebSocket(webstockUrl);
+        WebSocketObj = new WebSocket(webstockUrl);
         console.log('初始化');
         init();
-    } catch(e) {
+    } catch (e) {
         console.log(e);
         console.log('catch');
         reconnect(webstockUrl);
     }
 }
-function init() {
+
+function init () {
     WebSocketObj.onclose = function () {
         console.log('链接关闭');
         reconnect(webstockUrl);
     };
-    WebSocketObj.onerror = function() {
+    WebSocketObj.onerror = function () {
         console.log('发生异常了');
         reconnect(webstockUrl);
     };
@@ -37,9 +39,9 @@ function init() {
  * 尝试重连
  * @param url
  */
-function reconnect(url) {
-    console.log('尝试重连',lockReconnect);
-    if(lockReconnect) {
+function reconnect (url) {
+    console.log('尝试重连', lockReconnect);
+    if (lockReconnect) {
         return;
     }
     lockReconnect = true;
@@ -50,20 +52,21 @@ function reconnect(url) {
         lockReconnect = false;
     }, 5000);
 }
+
 //心跳检测
 var heartCheck = {
     timeout: 5000,
     timeoutObj: null,
     serverTimeoutObj: null,
-    start: function(){
+    start: function () {
         // console.log('start');
         var self = this;
         this.timeoutObj && clearTimeout(this.timeoutObj);
         this.serverTimeoutObj && clearTimeout(this.serverTimeoutObj);
-        this.timeoutObj = setTimeout(function(){
+        this.timeoutObj = setTimeout(function () {
             //这里发送一个心跳，后端收到后，返回一个心跳消息，
             WebSocketObj.send("ping");
-            self.serverTimeoutObj = setTimeout(function() {
+            self.serverTimeoutObj = setTimeout(function () {
                 console.log('');
                 WebSocketObj.close();
             }, self.timeout);
@@ -72,5 +75,10 @@ var heartCheck = {
     }
 }
 createWebSocket(webstockUrl);
-
-export default WebSocketObj
+// const webstock = {
+//     install: function (Vue) {
+//         Vue.$webstock = WebSocketObj
+//     }
+// }
+const websocket = WebSocketObj
+export default websocket

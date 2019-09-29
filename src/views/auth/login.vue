@@ -17,7 +17,6 @@
             LoginForm
         },
         methods: {
-
             handleSubmit ({userName, password}) {
                 this.handleLogin({userName, password}).then(res => {
                     this.getUserInfo().then(res => {
@@ -33,11 +32,14 @@
 <style lang="scss" scoped>
     .login {
         width: 100%;
-        height: 100%;
+        height: calc(100vh);
         display: flex;
+        display: -webkit-flex;
         align-items: center;
+        justify-content: center;
         &-con {
-            width: 300px;
+            width: 400px;
+            height: 300px;
             &-header {
                 font-size: 16px;
                 font-weight: 300;
