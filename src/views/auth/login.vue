@@ -10,20 +10,26 @@
     </div>
 </template>
 <script>
-    import LoginForm from './loginform'
+    import LoginForm from '@/components/login/form'
 
     export default {
+        data () {
+            return {
+                loading: false
+            }
+        },
         components: {
             LoginForm
         },
         methods: {
-            handleSubmit ({userName, password}) {
-                this.handleLogin({userName, password}).then(res => {
-                    this.getUserInfo().then(res => {
-                        this.$router.push({
-                            name: this.$config.homeName
-                        })
-                    })
+            handleSubmit ({username, password}) {
+                this.$store.dispatch('auth/login', {username, password}).then(resp => {
+                    // eslint-disable-next-line no-console
+                    this.$router.push({path: this.redirect || '/', query: this.otherQuery})
+                    this.loading = false
+                }).catch(error=>{
+                    // eslint-disable-next-line no-console
+                    console.log(error)
                 })
             }
         }
@@ -37,9 +43,11 @@
         display: -webkit-flex;
         align-items: center;
         justify-content: center;
+
         &-con {
             width: 400px;
             height: 300px;
+
             &-header {
                 font-size: 16px;
                 font-weight: 300;
