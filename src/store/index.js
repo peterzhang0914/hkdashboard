@@ -1,7 +1,7 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 import getters from '@/store/getters'
-import logistic from '@/store/moduels/logistic'
+import logistics from '@/store/moduels/logistics'
 import auth from '@/store/moduels/auth'
 
 Vue.use(Vuex)
@@ -9,7 +9,7 @@ Vue.use(Vuex)
 
 const store = new Vuex.Store({
     modules: {
-        logistic,
+        logistics,
         auth
     },
     getters

@@ -1,5 +1,5 @@
-const getters={
-    logistic_data: state=> state.logistic.data,
+const getters = {
+    ALL_LOGISTICS: state => state.logistics.data,
     token: state => state.auth.token,
 }
 

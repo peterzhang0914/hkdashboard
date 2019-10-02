@@ -1,14 +1,14 @@
 import request from '@/utils/request'
 
-export function Api_get_Logistic () {
+export function getAllLogistics () {
     return request({
-        url:"/api/v1/logistic",
+        url:"/api/v1/logistics",
         method:"get"
     })
 }
-export function updateLogistic () {
+export function updateLogistics () {
 
 }
-export function deleteLogistic () {
+export function deleteLogistics () {
 
 }

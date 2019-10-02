@@ -34,7 +34,7 @@ const createRouter = () => new Router({
 })
 
 // eslint-disable-next-line no-unused-vars
-function resetRouter() {
+function resetRouter () {
     const newRouter = createRouter()
     router.matcher = newRouter.matcher // reset router
 }

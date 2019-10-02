@@ -1,3 +1,4 @@
+
 let webstockUrl = process.env.VUE_APP_WS_BASEURL;
 let WebSocketObj = Object;
 var lockReconnect = false;//避免重复连接
@@ -19,6 +20,7 @@ function createWebSocket () {
 }
 
 function init () {
+
     WebSocketObj.onclose = function () {
         // eslint-disable-next-line no-console
         console.log('链接关闭');
@@ -36,7 +38,7 @@ function init () {
     WebSocketObj.onmessage = function (event) {
         //拿到任何消息都说明当前连接是正常的
         // eslint-disable-next-line no-console
-        console.log(event.data)
+        console.log(event.data);
         heartCheck.start();
     }
 }
