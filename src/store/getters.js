@@ -1,6 +1,6 @@
 const getters = {
-    ALL_LOGISTICS: state => state.logistics.data,
-    token: state => state.auth.token,
+    ALL_LOGISTICS: state => state.logistics.dat,
+    TOKEN: state => state.auth.token,
 }
 
 

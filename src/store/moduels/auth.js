@@ -10,13 +10,13 @@ const actions = {
     login ({commit}, loginForm) {
         const {username, password} = loginForm;
         return new Promise((resolve, reject) => {
-            login({username: username.trim(), password: password.trim()}).then(response => {
-                const {token} = response;
+            login({username: username.trim(), password: password.trim()}).then(resp => {
+                const {data} = resp;
                 // eslint-disable-next-line no-console
-                commit('SET_TOKEN', token);
-                resolve(response)
-            }).catch(error => {
-                reject(error)
+                commit('SET_TOKEN', data.token);
+                resolve(resp)
+            }).catch(err => {
+                reject(err)
             })
         })
     },

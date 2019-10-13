@@ -11,7 +11,9 @@
     }
 </script>
 
-<style>
+<style lang="scss">
     #app {
+        height: 100%;
+        margin: 0px;
     }
 </style>

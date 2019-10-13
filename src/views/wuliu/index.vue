@@ -1,20 +1,49 @@
 <template>
     <div class="zf-wuliu-wrapper">
-        <i-button @click="addNew">新增记录</i-button>
-        <i-button @click="removeArray">删除所有</i-button>
-        <TableWuliu ref="wuliutab" :cols="cols" :dat="dat" @show="show"
-                    @remove="remove"></TableWuliu>
+        <Modal v-model="mdl"
+               title="物流信息"
+               @on-cancel="cancel"
+        >
+            <WuliuForm ref="wlform" @closeModal="closeModal"></WuliuForm>
+            <div slot="footer"></div>
+        </Modal>
+        <Modal v-model="mdlSearch"
+               title="信息搜索"
+               @on-cancel="cancel"
+        >
+            <WuliuFormSearch ref="wlformsearch" @closeModal="closeModalSearch"></WuliuFormSearch>
+            <div slot="footer"></div>
+        </Modal>
+        <div class="zf-wuliu-button-group">
+            <Button class="zf-wuliu-button" type="primary" @click="addRecord">新增记录</Button>
+            <Button class="zf-wuliu-button" type="error" @click="removeArray">删除所选</Button>
+            <Button class="zf-wuliu-button" type="success" @click="searchRecord">高级搜索</Button>
+            <Button class="zf-wuliu-button" @click="toggleAutomation">
+                {{this.automation===false?"自动刷新":"停止刷新"}}
+            </Button>
+            <WuliuPage class="zf-wuliu-pager" :dataCount="pageObj.dataCount" :pageSize="pageObj.pageSize"
+                       :currentPage="pageObj.currPage"
+                       @changePager="changePager"></WuliuPage>
+        </div>
+        <WuliuTable ref="wuliutab" :cols="cols" :dat="page_dat" :loading="loading" @edit="edit"></WuliuTable>
+
     </div>
 </template>
 
 <script>
-    import TableWuliu from '@/components/table'
+    import WuliuTable from '@/components/wuliu/table'
+    import WuliuForm from '@/components/wuliu/form'
+    import WuliuFormSearch from '@/components/wuliu/formSearch'
+    import WuliuPage from '@/components/common/pager'
     import moment from 'moment'
 
     export default {
         name: "index",
         components: {
-            TableWuliu
+            WuliuTable,
+            WuliuForm,
+            WuliuFormSearch,
+            WuliuPage
         },
         methods: {
             initWebSocket () { //初始化
@@ -31,14 +60,13 @@
             },
             websocketonerror (evt) { //错误
                 console.log("WebSocket连接发生错误_ONERROR");
-                console.log(evt)
                 this.reconnect()
             },
             websocketonmessage (evt) { //数据接收
                 //处理逻辑
-                if (evt.data !== "PING") {
+                if (evt.data !== "PING" && evt.data !== "" && evt.data !== undefined) {
                     let jsdata = JSON.parse(evt.data)
-                    this.dat = jsdata.data
+                    this.$store.commit('logistics/SET_ALL_LOGISTICS', jsdata.data)
                 }
             },
             websocketclose (evt) { //关闭
@@ -60,824 +88,185 @@
                     _this.lockReconnect = false;
                 }, 5000);
             },
-            show (idx) {
-                console.log("显示", idx)
+            edit (row) {
+                this.$refs.wlform.actionType = 2
+                this.mdl = true
+                for (let x in row) {
+                    //把row值赋予表单
+                    if (this.$refs.wlform.formValidate[x] !== undefined) {
+                        this.$refs.wlform.formValidate[x] = row[x]
+                    }
+                }
+                //更新的时候带上id，服务器端使用save
+                this.$refs.wlform.formValidate['id'] = row['id']
+
             },
-            remove (idx) {
-                console.log("删除", idx)
-            },
-            addNew: () => {
+            searchRecord () {
+                //停止自动刷新，关闭websocket
+                this.automation=true
+                this.toggleAutomation()
+                //打开搜索modal
+                this.mdlSearch = true
+
+
             },
             removeArray () {
-                console.log(this.$refs.wuliutab.selected)
-            }
 
+                if (this.$refs.wuliutab.selected.length === 0) {
+                    this.$Message.info("请选择要删除的数据")
+                } else {
+                    this.$store.dispatch('logistics/deleteLogistics', this.$refs.wuliutab.selected).then(resp => {
+                        this.$Message.info("删除成功")
+                        this.closeModal()
+                    }).catch(err => {
+                        console.log(err)
+                    })
+                }
+            },
+            addRecord () {
+                this.$refs.wlform.actionType = 1
+                this.mdl = true
+                this.$refs.wlform.handleReset('formValidate')
+            },
+            cancel () {
+                this.$refs.wlform.handleReset('formValidate');
+                this.$refs.wlformsearch.handleReset('formSearchValidate')
+            },
+            closeModal () {
+                this.cancel()
+                this.mdl = false
+            },
+            closeModalSearch () {
+                this.cancel()
+                this.mdlSearch = false
+            },
+            changePager (idx) {
+                let _start = (idx - 1) * this.pageObj.pageSize;
+                let _end = idx * this.pageObj.pageSize;
+                this.page_dat = this.dat.slice(_start, _end);
+                this.pageObj.currPage = idx;
+                this.pageObj.hasNext = this.pageObj.currPage === this.pageObj.totalPage ? false : true;
+            },
+            handleAllData (newData) {
+                //监听到新数据进入后,清除timer，重新计算pageObj对象
+                this.initPageObj()
+                // 保存取到的所有数据
+                this.dat = newData;
+                this.pageObj.dataCount = this.dat.length
+                // 初始化显示，小于每页显示条数，全显，大于每页显示条数，取前每页条数显示
+                if (this.dat.length <= this.pageObj.pageSize) {
+                    this.page_dat = this.dat;
+                    this.pageObj.hasNext = false
+                } else {
+                    this.page_dat = this.dat.slice(0, this.pageObj.pageSize);
+                    this.pageObj.hasNext = true
+                }
+                this.pageObj.totalPage = Math.ceil(this.dat.length / this.pageObj.pageSize)
+
+            },
+            startPageTimer () {
+                let _this = this
+                _this.pageTimer = setInterval(() => {
+                    if (_this.pageObj.hasNext) {
+                        _this.changePager(_this.pageObj.currPage + 1)
+                    } else {
+                        _this.changePager(1)
+                    }
+                }, 5000);
+            },
+            toggleAutomation () {
+                this.automation = !this.automation
+                if (this.automation === true) {
+                    this.$store.dispatch('logistics/getAllLogistics')
+                    this.initWebSocket()
+                    this.startPageTimer()
+                } else {
+                    clearInterval(this.pageTimer)
+                    clearTimeout(this.tt);
+                    this.pageTimer = undefined
+                    this.tt = undefined
+                    this.ws = undefined
+                }
+            },
+            initPageObj () {
+                this.pageObj.dataCount = 0;
+                this.pageObj.pageSize = 14;
+                this.pageObj.currPage = 1;
+                this.pageObj.totalPage = 0;
+                this.pageObj.hasNext = false
+            }
         },
         mounted () {
-            this.initWebSocket()
-        },
-        watch: {},
+            this.$store.dispatch('logistics/getAllLogistics').then(resp => {
+
+            }).catch(err => {
+
+            });
+            if (this.automation) {
+                this.initWebSocket();
+                this.startPageTimer()
+            }
+
+        }
+        ,
+        computed: {
+            cmpAllLogistics () {
+                return this.$store.getters.ALL_LOGISTICS
+            }
+        }
+        ,
+        watch: {
+            // eslint-disable-next-line no-unused-vars
+            cmpAllLogistics (newval, oldval) {
+                this.handleAllData(newval)
+            }
+        }
+        ,
         data () {
             return {
+                automation: true,
                 ws: '',
                 lockReconnect: false,
                 tt: '',
-                dat: [
-                    {
-                        "id": 1,
-                        "created_at": "2019-10-01T10:37:11+08:00",
-                        "updated_at": "2019-10-01T10:37:11+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "1北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 2,
-                        "created_at": "2019-10-01T10:53:17+08:00",
-                        "updated_at": "2019-10-01T10:53:17+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "1北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 3,
-                        "created_at": "2019-10-01T11:21:44+08:00",
-                        "updated_at": "2019-10-01T11:21:44+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "1北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 4,
-                        "created_at": "2019-10-01T11:25:32+08:00",
-                        "updated_at": "2019-10-01T11:25:32+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "2北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 5,
-                        "created_at": "2019-10-01T11:28:47+08:00",
-                        "updated_at": "2019-10-01T11:28:47+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "2北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 6,
-                        "created_at": "2019-10-01T11:35:28+08:00",
-                        "updated_at": "2019-10-01T11:35:28+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 7,
-                        "created_at": "2019-10-01T22:49:19+08:00",
-                        "updated_at": "2019-10-01T22:49:19+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 8,
-                        "created_at": "2019-10-01T22:50:21+08:00",
-                        "updated_at": "2019-10-01T22:50:21+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 9,
-                        "created_at": "2019-10-01T22:53:23+08:00",
-                        "updated_at": "2019-10-01T22:53:23+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 10,
-                        "created_at": "2019-10-01T22:57:51+08:00",
-                        "updated_at": "2019-10-01T22:57:51+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 11,
-                        "created_at": "2019-10-01T22:59:18+08:00",
-                        "updated_at": "2019-10-01T22:59:18+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 12,
-                        "created_at": "2019-10-01T23:06:23+08:00",
-                        "updated_at": "2019-10-01T23:06:23+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 13,
-                        "created_at": "2019-10-01T23:07:57+08:00",
-                        "updated_at": "2019-10-01T23:07:57+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 14,
-                        "created_at": "2019-10-01T23:15:30+08:00",
-                        "updated_at": "2019-10-01T23:15:30+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 15,
-                        "created_at": "2019-10-01T23:17:16+08:00",
-                        "updated_at": "2019-10-01T23:17:16+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 16,
-                        "created_at": "2019-10-01T23:31:49+08:00",
-                        "updated_at": "2019-10-01T23:31:49+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 17,
-                        "created_at": "2019-10-01T23:33:01+08:00",
-                        "updated_at": "2019-10-01T23:33:01+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 18,
-                        "created_at": "2019-10-01T23:33:28+08:00",
-                        "updated_at": "2019-10-01T23:33:28+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 19,
-                        "created_at": "2019-10-01T23:33:54+08:00",
-                        "updated_at": "2019-10-01T23:33:54+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 20,
-                        "created_at": "2019-10-01T23:36:32+08:00",
-                        "updated_at": "2019-10-01T23:36:32+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 21,
-                        "created_at": "2019-10-01T23:37:15+08:00",
-                        "updated_at": "2019-10-01T23:37:15+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 22,
-                        "created_at": "2019-10-01T23:37:32+08:00",
-                        "updated_at": "2019-10-01T23:37:32+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 23,
-                        "created_at": "2019-10-01T23:42:56+08:00",
-                        "updated_at": "2019-10-01T23:42:56+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 24,
-                        "created_at": "2019-10-02T00:06:14+08:00",
-                        "updated_at": "2019-10-02T00:06:14+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 25,
-                        "created_at": "2019-10-02T08:08:07+08:00",
-                        "updated_at": "2019-10-02T08:08:07+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 26,
-                        "created_at": "2019-10-02T08:49:50+08:00",
-                        "updated_at": "2019-10-02T08:49:50+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 27,
-                        "created_at": "2019-10-02T08:50:39+08:00",
-                        "updated_at": "2019-10-02T08:50:39+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 28,
-                        "created_at": "2019-10-02T08:56:25+08:00",
-                        "updated_at": "2019-10-02T08:56:25+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 29,
-                        "created_at": "2019-10-02T08:58:50+08:00",
-                        "updated_at": "2019-10-02T08:58:50+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 30,
-                        "created_at": "2019-10-02T09:02:47+08:00",
-                        "updated_at": "2019-10-02T09:02:47+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 31,
-                        "created_at": "2019-10-02T09:04:01+08:00",
-                        "updated_at": "2019-10-02T09:04:01+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 32,
-                        "created_at": "2019-10-02T09:06:56+08:00",
-                        "updated_at": "2019-10-02T09:06:56+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 33,
-                        "created_at": "2019-10-02T09:07:07+08:00",
-                        "updated_at": "2019-10-02T09:07:07+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 34,
-                        "created_at": "2019-10-02T09:08:25+08:00",
-                        "updated_at": "2019-10-02T09:08:25+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 35,
-                        "created_at": "2019-10-02T09:08:59+08:00",
-                        "updated_at": "2019-10-02T09:08:59+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 36,
-                        "created_at": "2019-10-02T09:09:05+08:00",
-                        "updated_at": "2019-10-02T09:09:05+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 37,
-                        "created_at": "2019-10-02T09:09:28+08:00",
-                        "updated_at": "2019-10-02T09:09:28+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 38,
-                        "created_at": "2019-10-02T09:09:47+08:00",
-                        "updated_at": "2019-10-02T09:09:47+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 39,
-                        "created_at": "2019-10-02T15:23:31+08:00",
-                        "updated_at": "2019-10-02T15:23:31+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 40,
-                        "created_at": "2019-10-02T15:24:12+08:00",
-                        "updated_at": "2019-10-02T15:24:12+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 41,
-                        "created_at": "2019-10-02T15:24:58+08:00",
-                        "updated_at": "2019-10-02T15:24:58+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 42,
-                        "created_at": "2019-10-02T15:26:33+08:00",
-                        "updated_at": "2019-10-02T15:26:33+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 43,
-                        "created_at": "2019-10-02T15:27:06+08:00",
-                        "updated_at": "2019-10-02T15:27:06+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 44,
-                        "created_at": "2019-10-02T15:28:49+08:00",
-                        "updated_at": "2019-10-02T15:28:49+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 45,
-                        "created_at": "2019-10-02T15:29:04+08:00",
-                        "updated_at": "2019-10-02T15:29:04+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 46,
-                        "created_at": "2019-10-02T15:31:00+08:00",
-                        "updated_at": "2019-10-02T15:31:00+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 47,
-                        "created_at": "2019-10-02T15:50:10+08:00",
-                        "updated_at": "2019-10-02T15:50:10+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 48,
-                        "created_at": "2019-10-02T15:52:17+08:00",
-                        "updated_at": "2019-10-02T15:52:17+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 49,
-                        "created_at": "2019-10-02T15:53:49+08:00",
-                        "updated_at": "2019-10-02T15:53:49+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 50,
-                        "created_at": "2019-10-02T15:54:26+08:00",
-                        "updated_at": "2019-10-02T15:54:26+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 51,
-                        "created_at": "2019-10-02T15:55:21+08:00",
-                        "updated_at": "2019-10-02T15:55:21+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 52,
-                        "created_at": "2019-10-02T15:55:40+08:00",
-                        "updated_at": "2019-10-02T15:55:40+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 53,
-                        "created_at": "2019-10-02T15:55:57+08:00",
-                        "updated_at": "2019-10-02T15:55:57+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 54,
-                        "created_at": "2019-10-02T15:58:07+08:00",
-                        "updated_at": "2019-10-02T15:58:07+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 55,
-                        "created_at": "2019-10-02T15:58:44+08:00",
-                        "updated_at": "2019-10-02T15:58:44+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 56,
-                        "created_at": "2019-10-02T16:02:38+08:00",
-                        "updated_at": "2019-10-02T16:02:38+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 57,
-                        "created_at": "2019-10-02T16:04:12+08:00",
-                        "updated_at": "2019-10-02T16:04:12+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 58,
-                        "created_at": "2019-10-02T16:06:38+08:00",
-                        "updated_at": "2019-10-02T16:06:38+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 59,
-                        "created_at": "2019-10-02T16:07:30+08:00",
-                        "updated_at": "2019-10-02T16:07:30+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    },
-                    {
-                        "id": 60,
-                        "created_at": "2019-10-02T16:08:53+08:00",
-                        "updated_at": "2019-10-02T16:08:53+08:00",
-                        "deleted_at": null,
-                        "arrive_date": "2019-11-13T00:00:00+08:00",
-                        "ship_date": "2019-11-13T00:00:00+08:00",
-                        "store_name": "3北京大同路餐厅",
-                        "order_no": 12332112,
-                        "lorry": "13m",
-                        "status": 3,
-                        "comment": "取消"
-                    }
-                ],
+                pageTimer: '',
+                mdl: false,
+                mdlSearch: false,
+                dat: [],
+                page_dat: [],
+                loading: false,
+                pageObj: {
+                    dataCount: 0,
+                    pageSize: 0,
+                    currPage: 1,
+                    totalPage: 0,
+                    hasNext: false,
+                },
                 cols: [
+
                     {
                         type: 'selection',
                         width: 60,
                         align: 'center'
                     },
                     {
-                        title: '餐厅名称',
+                        title: '城市',
+                        key: 'city',
+                        width: 100,
+                    },
+                    {
+                        title: '名称',
                         key: 'store_name',
-                        slot: 'store_name'
+                        width: 130,
+                    },
+                    {
+                        title: '餐厅类型',
+                        key: 'store_type',
+                        width: 100,
                     },
                     {
                         title: '到店日期',
                         key: 'arrive_date',
+                        width: 130,
                         render: (h, params) => {
                             return h('span',
                                 moment(params.row.arrive_date).format("YYYY-MM-DD")
@@ -888,6 +277,18 @@
                     {
                         title: '发货日期',
                         key: 'ship_date',
+                        width: 130,
+                        render: (h, params) => {
+                            return h('span',
+                                moment(params.row.ship_date).format("YYYY-MM-DD")
+                            );
+                        },
+                        sortable: true
+                    },
+                    {
+                        title: '配货日期',
+                        key: 'pick_date',
+                        width: 130,
                         render: (h, params) => {
                             return h('span',
                                 moment(params.row.ship_date).format("YYYY-MM-DD")
@@ -897,43 +298,66 @@
                     },
                     {
                         title: '订单编码',
-                        key: 'order_no'
+                        key: 'order_no',
+                        minWidth: 100,
                     },
                     {
-                        title: '车型',
-                        key: 'lorry'
+                        title: '运输车型',
+                        key: 'lorry',
+                        width: 100,
                     },
                     {
-                        title: '状态',
-                        key: 'status'
+                        title: '配货状态',
+                        key: 'status',
+                        width: 100,
                     },
                     {
-                        title: '备注',
-                        key: 'comment'
+                        title: '备注信息',
+                        key: 'comment',
+                        minWidth: 100,
                     },
                     {
-                        title: '创建时间',
-                        key: 'created_at',
-                        slot: 'created_at',
+                        title: '更新时间',
+                        key: 'updated_at',
+                        width: 130,
                         render: (h, params) => {
                             return h('span',
-                                moment(params.row.created_at).format("YYYY-MM-DD")
+                                moment(params.row.updated_at).format("YYYY-MM-DD")
                             );
                         },
                         sortable: true
                     },
                     {
                         title: '操作',
-                        width: 150,
+                        width: 80,
                         slot: 'action',
                         align: 'center'
                     }
                 ],
             }
-        },
+        }
+        ,
     }
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+    .zf-wuliu-wrapper {
+
+        .zf-wuliu-button-group {
+            display: flex;
+            margin-bottom: 5px;
+
+            .zf-wuliu-button {
+                margin-left: 5px;
+            }
+
+            .zf-wuliu-pager {
+                margin-left: 5px;
+                float: right;
+            }
+        }
+
+    }
+
 
 </style>

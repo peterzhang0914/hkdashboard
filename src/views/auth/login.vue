@@ -27,7 +27,7 @@
                     // eslint-disable-next-line no-console
                     this.$router.push({path: this.redirect || '/', query: this.otherQuery})
                     this.loading = false
-                }).catch(error=>{
+                }).catch(error => {
                     // eslint-disable-next-line no-console
                     console.log(error)
                 })

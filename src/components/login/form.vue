@@ -53,6 +53,7 @@
                 return {
                     userName: this.userNameRules,
                     password: this.passwordRules
+
                 }
             }
         },

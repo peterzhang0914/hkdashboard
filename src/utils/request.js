@@ -16,11 +16,11 @@ Message.config({
 //在发出的请求中添加token
 service.interceptors.request.use(
     config => {
-        if (store.getters.token) {
+        if (store.getters.TOKEN) {
+            config.headers['token'] = getToken()
+        } else {
             let token = getToken()
-            if (token !== '') {
-                config.headers['token'] = getToken()
-            }
+            config.headers['token'] = token
         }
         return config
     },
@@ -32,24 +32,16 @@ service.interceptors.request.use(
 service.interceptors.response.use(
     response => {
         const res = response.data;
-        if (res.token !== undefined) {
+        if (res.errno === 0) {
             return res
-        }
-        if (res.errno !== 200) {
-            Message.error(res.errmsg);
-            //删除所有token
-            store.dispatch('auth/restToken').then(() => {
-                //刷新路由，此时会被路由守卫拦截
-                location.reload()
-            })
-            return Promise.reject(new Error(res))
         } else {
-            return res
+            Message.error(res.errmsg);
+            store.dispatch('auth/restToken').then(() => {
+            });
+            return Promise.reject(new Error(res.errmsg))
         }
     },
     error => {
-        // eslint-disable-next-line no-console
-        console.log("in error !!!!")
         return Promise.reject(error)
     }
 )
