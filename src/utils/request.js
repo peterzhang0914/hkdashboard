@@ -3,11 +3,17 @@ import store from '@/store'
 import {getToken} from "@/utils/cookies";
 import {Message} from 'iview';
 import 'iview/dist/styles/iview.css'
+import moment from 'moment'
 
+//解决AXIOS post utc问题
+Date.prototype.toISOString = function () {
+    let date = moment(this).format("YYYY-MM-DDTHH:mm:ssZ");
+    return date
+};
 const service = axios.create({
     baseURL: process.env.VUE_APP_BASE_API,
-    timeout: 5000
-})
+    timeout: 5000,
+});
 //配置iview的显示时间
 Message.config({
     top: 50,
@@ -19,8 +25,7 @@ service.interceptors.request.use(
         if (store.getters.TOKEN) {
             config.headers['token'] = getToken()
         } else {
-            let token = getToken()
-            config.headers['token'] = token
+            config.headers['token'] = getToken()
         }
         return config
     },
@@ -28,7 +33,7 @@ service.interceptors.request.use(
         // eslint-disable-next-line no-console
         console.log(error)
     }
-)
+);
 service.interceptors.response.use(
     response => {
         const res = response.data;

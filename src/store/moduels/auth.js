@@ -1,11 +1,19 @@
-import {login} from '@/api/auth'
-import {removeToken, setToken} from '@/utils/cookies'
+import {login, logoff} from '@/api/auth'
+import {getToken, removeToken, setToken} from '@/utils/cookies'
 
 const state = {
     data: [],
     token: ''
 };
 const actions = {
+    restToken ({commit}) {
+        // eslint-disable-next-line no-unused-vars
+        return new Promise((resolve, reject) => {
+            commit("SET_TOKEN", "")
+            removeToken()
+            resolve()
+        })
+    },
     // eslint-disable-next-line no-unused-vars
     login ({commit}, loginForm) {
         const {username, password} = loginForm;
@@ -20,14 +28,22 @@ const actions = {
             })
         })
     },
-    restToken({commit}){
-        // eslint-disable-next-line no-unused-vars
+    logoff ({commit}) {
+        let postDat = {
+            token: getToken()
+        };
         return new Promise((resolve, reject) => {
-            commit("SET_TOKEN", "")
-            removeToken()
-            resolve()
+            logoff(postDat).then(resp => {
+                commit("SET_TOKEN", "")
+                removeToken()
+                resolve(resp)
+            }).catch(err => {
+                reject(err)
+            })
         })
-    }
+    },
+
+
 };
 
 const mutations = {

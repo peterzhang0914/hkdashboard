@@ -18,15 +18,16 @@
             <Button class="zf-wuliu-button" type="primary" @click="addRecord">新增记录</Button>
             <Button class="zf-wuliu-button" type="error" @click="removeArray">删除所选</Button>
             <Button class="zf-wuliu-button" type="success" @click="searchRecord">高级搜索</Button>
+            <Button class="zf-wuliu-button" type="success" @click="cleanSearch">清空搜索</Button>
             <Button class="zf-wuliu-button" @click="toggleAutomation">
                 {{this.automation===false?"自动刷新":"停止刷新"}}
             </Button>
+            <Button class="zf-wuliu-button" @click="logoff">注销</Button>
             <WuliuPage class="zf-wuliu-pager" :dataCount="pageObj.dataCount" :pageSize="pageObj.pageSize"
                        :currentPage="pageObj.currPage"
                        @changePager="changePager"></WuliuPage>
         </div>
         <WuliuTable ref="wuliutab" :cols="cols" :dat="page_dat" :loading="loading" @edit="edit"></WuliuTable>
-
     </div>
 </template>
 
@@ -36,6 +37,7 @@
     import WuliuFormSearch from '@/components/wuliu/formSearch'
     import WuliuPage from '@/components/common/pager'
     import moment from 'moment'
+    import {getToken} from "@/utils/cookies";
 
     export default {
         name: "index",
@@ -47,7 +49,8 @@
         },
         methods: {
             initWebSocket () { //初始化
-                this.ws = new WebSocket(process.env.VUE_APP_WS_BASEURL);
+                let token = getToken()
+                this.ws = new WebSocket(process.env.VUE_APP_WS_BASEURL, [token]);
                 this.ws.onopen = this.websocketonopen;
                 this.ws.onerror = this.websocketonerror;
                 this.ws.onmessage = this.websocketonmessage;
@@ -64,6 +67,7 @@
             },
             websocketonmessage (evt) { //数据接收
                 //处理逻辑
+                console.log("WebSocket连接收到信息_ONMESSAGE")
                 if (evt.data !== "PING" && evt.data !== "" && evt.data !== undefined) {
                     let jsdata = JSON.parse(evt.data)
                     this.$store.commit('logistics/SET_ALL_LOGISTICS', jsdata.data)
@@ -71,7 +75,7 @@
             },
             websocketclose (evt) { //关闭
                 console.log("WebSocket关闭_ONCLOSE");
-                this.reconnect()
+                // this.reconnect()
             },
             reconnect () {
                 let _this = this
@@ -101,17 +105,16 @@
                 this.$refs.wlform.formValidate['id'] = row['id']
 
             },
-            searchRecord () {
-                //停止自动刷新，关闭websocket
-                this.automation=true
-                this.toggleAutomation()
-                //打开搜索modal
-                this.mdlSearch = true
-
-
+            logoff () {
+                this.$store.dispatch('auth/logoff').then(resp => {
+                    if (resp.errno === 0) {
+                        location.reload()
+                    }
+                }).catch(err => {
+                    console.log(err)
+                })
             },
             removeArray () {
-
                 if (this.$refs.wuliutab.selected.length === 0) {
                     this.$Message.info("请选择要删除的数据")
                 } else {
@@ -147,11 +150,19 @@
                 this.pageObj.currPage = idx;
                 this.pageObj.hasNext = this.pageObj.currPage === this.pageObj.totalPage ? false : true;
             },
+            initPageObj () {
+                this.pageObj.dataCount = 0;
+                this.pageObj.pageSize = 14;
+                this.pageObj.currPage = 1;
+                this.pageObj.totalPage = 0;
+                this.pageObj.hasNext = false
+            },
             handleAllData (newData) {
                 //监听到新数据进入后,清除timer，重新计算pageObj对象
                 this.initPageObj()
                 // 保存取到的所有数据
                 this.dat = newData;
+                console.log(this.dat)
                 this.pageObj.dataCount = this.dat.length
                 // 初始化显示，小于每页显示条数，全显，大于每页显示条数，取前每页条数显示
                 if (this.dat.length <= this.pageObj.pageSize) {
@@ -162,7 +173,9 @@
                     this.pageObj.hasNext = true
                 }
                 this.pageObj.totalPage = Math.ceil(this.dat.length / this.pageObj.pageSize)
-
+                if (this.pageObj.totalPage === 0) {
+                    this.pageObj.totalPage = 1
+                }
             },
             startPageTimer () {
                 let _this = this
@@ -174,33 +187,41 @@
                     }
                 }, 5000);
             },
+
             toggleAutomation () {
-                this.automation = !this.automation
+                this.automation = !this.automation;
                 if (this.automation === true) {
-                    this.$store.dispatch('logistics/getAllLogistics')
-                    this.initWebSocket()
+                    this.$store.dispatch('logistics/getAllLogistics');
+                    this.initWebSocket();
+                    this.initPageObj()
                     this.startPageTimer()
                 } else {
-                    clearInterval(this.pageTimer)
+                    // this.ws.onmessage = () => {
+                    // }
+                    clearInterval(this.pageTimer);
                     clearTimeout(this.tt);
-                    this.pageTimer = undefined
-                    this.tt = undefined
-                    this.ws = undefined
+                    this.pageTimer = undefined;
+                    this.tt = undefined;
                 }
             },
-            initPageObj () {
-                this.pageObj.dataCount = 0;
-                this.pageObj.pageSize = 14;
-                this.pageObj.currPage = 1;
-                this.pageObj.totalPage = 0;
-                this.pageObj.hasNext = false
+
+            searchRecord () {
+                //停止自动刷新，关闭websocket
+                this.automation = true
+                this.toggleAutomation()
+                //打开搜索modal
+                this.mdlSearch = !this.mdlSearch
+            },
+            cleanSearch () {
+                this.$store.dispatch('logistics/getAllLogistics')
+                this.ws.onmessage = this.websocketonmessage()
             }
         },
         mounted () {
             this.$store.dispatch('logistics/getAllLogistics').then(resp => {
 
             }).catch(err => {
-
+                console.log(err)
             });
             if (this.automation) {
                 this.initWebSocket();
@@ -291,7 +312,7 @@
                         width: 130,
                         render: (h, params) => {
                             return h('span',
-                                moment(params.row.ship_date).format("YYYY-MM-DD")
+                                moment(params.row.pick_date).format("YYYY-MM-DD")
                             );
                         },
                         sortable: true

@@ -12,7 +12,6 @@ const actions = {
                 commit("SET_ALL_LOGISTICS", resp.data)
                 resolve(resp)
             }).catch(err => {
-                console.log('@store', err)
                 reject(err)
             })
 

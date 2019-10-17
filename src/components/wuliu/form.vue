@@ -15,14 +15,6 @@
                 <Input v-model="formValidate.order_no" placeholder="订单编码"></Input>
             </FormItem>
             <FormItem label="运输车型" prop="lorry">
-                <!--                <Select v-model="formValidate.lorry" placeholder="运输车型">-->
-                <!--                    <Option value="6米8">6米8</Option>-->
-                <!--                    <Option value="9米6">9米6</Option>-->
-                <!--                    <Option value="13米5">13米5</Option>-->
-                <!--                    <Option value="零担">零担</Option>-->
-                <!--                    <Option value="其他">其他</Option>-->
-                <!--                    -->
-                <!--                </Select>-->
                 <RadioGroup v-model="formValidate.lorry">
                     <Radio label="6米8">6米8</Radio>
                     <Radio label="9米6">9米6</Radio>
@@ -41,18 +33,18 @@
                 </RadioGroup>
             </FormItem>
             <FormItem label="状态" prop="status">
-                <Select v-model="formValidate.status" placeholder="选择状态">
-                    <Option value="未配货">未配货</Option>
-                    <Option value="配货中">配货中</Option>
-                    <Option value="已配货">已配货</Option>
-                    <Option value="已发货">已发货</Option>
-                </Select>
+                <RadioGroup v-model="formValidate.status">
+                    <Radio label="未配货">未配货</Radio>
+                    <Radio label="配货中">配货中</Radio>
+                    <Radio label="已配货">已配货</Radio>
+                    <Radio label="已发货">已发货</Radio>
+                </RadioGroup>
             </FormItem>
             <FormItem label="到店日期">
                 <Row>
                     <Col span="11">
                         <FormItem prop="arrive_date">
-                            <DatePicker type="date" placeholder="到店日期"
+                            <DatePicker type="date" format="yyyy-MM-dd" placeholder="到店日期"
                                         v-model="formValidate.arrive_date"></DatePicker>
                         </FormItem>
                     </Col>
@@ -62,7 +54,7 @@
                 <Row>
                     <Col span="11">
                         <FormItem prop="ship_date">
-                            <DatePicker type="date" placeholder="发货日期"
+                            <DatePicker type="date" format="yyyy-MM-dd" placeholder="发货日期"
                                         v-model="formValidate.ship_date"></DatePicker>
                         </FormItem>
                     </Col>
@@ -73,7 +65,7 @@
                 <Row>
                     <Col span="11">
                         <FormItem prop="pick_date">
-                            <DatePicker type="date" placeholder="发货日期"
+                            <DatePicker type="date" format="yyyy-MM-dd" placeholder="配货日期"
                                         v-model="formValidate.pick_date"></DatePicker>
                         </FormItem>
                     </Col>
@@ -84,7 +76,7 @@
                        placeholder="备注信息"></Input>
             </FormItem>
             <FormItem>
-                <Button type="primary" @click="handleSubmit()">提交</Button>
+                <Button type="primary" @click="handleSubmit">提交</Button>
                 <Button v-show="actionType===1?true:false" @click="handleReset('formValidate')"
                         style="margin-left: 8px">重置
                 </Button>
@@ -94,9 +86,12 @@
 </template>
 
 <script>
+    import moment from 'moment'
+
     export default {
         name: "form",
         methods: {
+
             handleReset (name) {
                 this.$refs[name].resetFields();
             },

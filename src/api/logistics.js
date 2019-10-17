@@ -9,7 +9,6 @@ export function apiGetAllLogistics () {
 
 export function apiSearchLogistics (formData) {
     return request({
-
             url: "/v1/logistics",
             method: "post",
             data: formData

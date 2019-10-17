@@ -33,12 +33,12 @@
                 </RadioGroup>
             </FormItem>
             <FormItem label="状态" prop="status">
-                <Select v-model="formSearchValidate.status" placeholder="选择状态">
-                    <Option value="未配货">未配货</Option>
-                    <Option value="配货中">配货中</Option>
-                    <Option value="已配货">已配货</Option>
-                    <Option value="已发货">已发货</Option>
-                </Select>
+                <RadioGroup v-model="formSearchValidate.status">
+                    <Radio value="未配货">未配货</Radio>
+                    <Radio value="配货中">配货中</Radio>
+                    <Radio value="已配货">已配货</Radio>
+                    <Radio value="已发货">已发货</Radio>
+                </RadioGroup>
             </FormItem>
             <FormItem label="到店日期">
                 <Row>

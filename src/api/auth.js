@@ -13,9 +13,10 @@ export function restToken () {
 
 }
 
-export function logoff () {
+export function logoff (data) {
     return request({
-        url: '/logoff',
-        method: 'post'
+        url: 'auth/logoff',
+        method: 'post',
+        data
     })
 }
